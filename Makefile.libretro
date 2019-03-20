@@ -22,8 +22,6 @@ INCFLAGS    :=
 SOURCES_C   :=
 SOURCES_CXX :=
 
-include Makefile.common
-
 # try to guess the dynarec based on the host system, unreliable
 ifeq ($(platform),win)
 	ifneq ($(findstring MINGW32,$(UNAME)),)
@@ -157,7 +155,7 @@ else ifeq ($(platform), libnx)
 	CFLAGS += -g -O2 -fPIE -I$(LIBNX)/include/ -ffunction-sections -fdata-sections -ftls-model=local-exec -Wl,--allow-multiple-definition -specs=$(LIBNX)/switch.specs
 	CFLAGS += $(INCLUDE) -D__SWITCH__ -DHAVE_LIBNX
 	CXXFLAGS += $(ASFLAGS) $(CFLAGS) -std=gnu++11
-	WITH_DYNAREC =
+	WITH_DYNAREC = arm64
 	STATIC_LINKING = 1
 else ifeq ($(platform), emscripten)
 	TARGET := $(TARGET_NAME)_libretro_$(platform).bc
@@ -167,7 +165,7 @@ else ifeq ($(platform), emscripten)
 else ifeq ($(platform), win)
 	COMMONFLAGS += -mno-ms-bitfields
 	TARGET := $(TARGET_NAME)_libretro.dll
-	LDFLAGS += -shared -static-libgcc -static-libstdc++ -Wl,--version-script=libretro/link.T -lwinmm -Wl,-Bstatic `sdl-config --static-libs` -Wl,-Bdynamic
+	LDFLAGS += -shared -static-libgcc -static-libstdc++ -Wl,--version-script=libretro/link.T -lwinmm -Wl,-Bstatic -Wl,-Bdynamic
 else ifeq ($(platform), genode)
 	TARGET  := $(TARGET_NAME)_libretro.lib.so
 	CC      := $(shell pkg-config genode-base --variable=cc)
@@ -190,6 +188,8 @@ else
 	O_LEVEL ?= -O3
 	COMMONFLAGS += $(O_LEVEL) -DNDEBUG -DGIT_VERSION=\"$(GIT_VERSION)\" -DSVN_VERSION=\"$(SVN_VERSION)\"
 endif
+
+include Makefile.common
 
 OBJECTS  = $(sort $(SOURCES_CXX:.cpp=.o) $(SOURCES_C:.c=.o))
 CXXFLAGS += -D__LIBRETRO__ $(fpic) $(INCFLAGS) $(COMMONFLAGS)

@@ -42,6 +42,10 @@
 #include "ints/int10.h"
 #include "mem.h"
 
+#ifdef HAVE_LIBNX
+#include <switch.h>
+#endif
+
 #define RETRO_DEVICE_JOYSTICK RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 1)
 
 #ifndef PATH_MAX_LENGTH
@@ -702,6 +706,9 @@ void retro_init (void)
     init_threads();
 }
 
+#ifdef HAVE_LIBNX
+extern "C" Jit dynarec_jit;
+#endif
 void retro_deinit(void)
 {
     frontend_exit = !dosbox_exit;
@@ -716,6 +723,10 @@ void retro_deinit(void)
         co_delete(emuThread);
         emuThread = 0;
     }
+    
+#ifdef HAVE_LIBNX
+	jitClose(&dynarec_jit);
+#endif
 }
 
 bool retro_load_game(const struct retro_game_info *game)

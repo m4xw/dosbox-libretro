@@ -185,6 +185,8 @@ void E_Exit(const char * format,...) {
 	vsprintf(buf,format,msg);
 	va_end(msg);
 	strcat(buf,"\n");
-
+#ifdef HAVE_LIBNX
+	printf(buf);
+#endif
 	throw(buf);
 }
