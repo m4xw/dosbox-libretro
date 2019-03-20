@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2019  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,11 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
- *
- *  Wengier: LFN support
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -28,7 +26,6 @@
 #include "shell.h" /* for DOS_Shell */
 
 bool WildFileCmp(const char * file, const char * wild);
-bool LWildFileCmp(const char * file, const char * wild);
 void Set_Label(char const * const input, char * const output, bool cdrom);
 
 class DriveManager {
@@ -38,6 +35,7 @@ public:
 	static int UnmountDrive(int drive);
 //	static void CycleDrive(bool pressed);
 //	static void CycleDisk(bool pressed);
+	static void CycleDisks(int drive, bool notify);
 	static void CycleAllDisks(void);
 	static void Init(Section* sec);
 	
@@ -64,9 +62,6 @@ public:
 	virtual bool FindFirst(char * _dir,DOS_DTA & dta,bool fcb_findfirst=false);
 	virtual bool FindNext(DOS_DTA & dta);
 	virtual bool GetFileAttr(char * name,Bit16u * attr);
-	virtual bool GetFileAttrEx(char* name, struct stat *status);
-	virtual Bit32u GetCompressedSize(char* name);
-	virtual void* CreateOpenFile(char const* const name);
 	virtual bool Rename(char * oldname,char * newname);
 	virtual bool AllocationInfo(Bit16u * _bytes_sector,Bit8u * _sectors_cluster,Bit16u * _total_clusters,Bit16u * _free_clusters);
 	virtual bool FileExists(const char* name);
@@ -161,9 +156,6 @@ public:
 	virtual bool FindFirst(char * _dir,DOS_DTA & dta,bool fcb_findfirst=false);
 	virtual bool FindNext(DOS_DTA & dta);
 	virtual bool GetFileAttr(char * name,Bit16u * attr);
-	virtual bool GetFileAttrEx(char* name, struct stat *status);
-	virtual Bit32u GetCompressedSize(char* name);
-	virtual void* CreateOpenFile(char const* const name);
 	virtual bool Rename(char * oldname,char * newname);
 	virtual bool AllocationInfo(Bit16u * _bytes_sector,Bit8u * _sectors_cluster,Bit16u * _total_clusters,Bit16u * _free_clusters);
 	virtual bool FileExists(const char* name);
@@ -173,12 +165,15 @@ public:
 	virtual bool isRemovable(void);
 	virtual Bits UnMount(void);
 public:
+	Bit8u readSector(Bit32u sectnum, void * data);
+	Bit8u writeSector(Bit32u sectnum, void * data);
 	Bit32u getAbsoluteSectFromBytePos(Bit32u startClustNum, Bit32u bytePos);
 	Bit32u getSectorSize(void);
+	Bit32u getClusterSize(void);
 	Bit32u getAbsoluteSectFromChain(Bit32u startClustNum, Bit32u logicalSector);
 	bool allocateCluster(Bit32u useCluster, Bit32u prevCluster);
 	Bit32u appendCluster(Bit32u startCluster);
-	void deleteClustChain(Bit32u startCluster);
+	void deleteClustChain(Bit32u startCluster, Bit32u bytePos);
 	Bit32u getFirstFreeClust(void);
 	bool directoryBrowse(Bit32u dirClustNumber, direntry *useEntry, Bit32s entNum, Bit32s start=0);
 	bool directoryChange(Bit32u dirClustNumber, direntry *useEntry, Bit32s entNum);
@@ -208,6 +203,7 @@ private:
 	} allocation;
 	
 	bootstrap bootbuffer;
+	bool absolute;
 	Bit8u fattype;
 	Bit32u CountOfClusters;
 	Bit32u partSectOff;
@@ -233,9 +229,6 @@ public:
 	virtual bool MakeDir(char * dir);
 	virtual bool Rename(char * oldname,char * newname);
 	virtual bool GetFileAttr(char * name,Bit16u * attr);
-	virtual bool GetFileAttrEx(char* name, struct stat *status);
-	virtual Bit32u GetCompressedSize(char* name);
-	virtual void* CreateOpenFile(char const* const name);
 	virtual bool FindFirst(char * _dir,DOS_DTA & dta,bool fcb_findfirst=false);
 	virtual void SetDir(const char* path);
 	virtual bool isRemote(void);
@@ -336,9 +329,6 @@ public:
 	virtual bool FindFirst(char *_dir, DOS_DTA &dta, bool fcb_findfirst);
 	virtual bool FindNext(DOS_DTA &dta);
 	virtual bool GetFileAttr(char *name, Bit16u *attr);
-	virtual bool GetFileAttrEx(char* name, struct stat *status);
-	virtual Bit32u GetCompressedSize(char* name);
-	virtual void* CreateOpenFile(char const* const name);
 	virtual bool Rename(char * oldname,char * newname);
 	virtual bool AllocationInfo(Bit16u *bytes_sector, Bit8u *sectors_cluster, Bit16u *total_clusters, Bit16u *free_clusters);
 	virtual bool FileExists(const char *name);
@@ -361,7 +351,6 @@ private:
 	bool GetNextDirEntry(const int dirIterator, isoDirEntry* de);
 	void FreeDirIterator(const int dirIterator);
 	bool ReadCachedSector(Bit8u** buffer, const Bit32u sector);
-	void GetLongName(char *ident, char *lfindName);
 	
 	struct DirIterator {
 		bool valid;
@@ -403,9 +392,6 @@ public:
 	bool FindFirst(char * _dir,DOS_DTA & dta,bool fcb_findfirst);
 	bool FindNext(DOS_DTA & dta);
 	bool GetFileAttr(char * name,Bit16u * attr);
-	bool GetFileAttrEx(char* name, struct stat *status);
-	Bit32u GetCompressedSize(char* name);
-	void* CreateOpenFile(char const* const name);
 	bool Rename(char * oldname,char * newname);
 	bool AllocationInfo(Bit16u * _bytes_sector,Bit8u * _sectors_cluster,Bit16u * _total_clusters,Bit16u * _free_clusters);
 	bool FileExists(const char* name);
@@ -415,6 +401,7 @@ public:
 	bool isRemote(void);
 	virtual bool isRemovable(void);
 	virtual Bits UnMount(void);
+	virtual char const* GetLabel(void);
 private:
 	VFILE_Block * search_file;
 };

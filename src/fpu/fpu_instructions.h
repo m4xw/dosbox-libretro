@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2014  The DOSBox Team
+ *  Copyright (C) 2002-2019  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -43,21 +43,20 @@ static void FPU_FNOP(void){
 
 static void FPU_PREP_PUSH(void){
 	TOP = (TOP - 1) &7;
-   //not needed and causing crashes //dosbox-x doesnt have this
-   //if (GCC_UNLIKELY(fpu.tags[TOP] != TAG_Empty)) E_Exit("FPU stack overflow");
+	if (GCC_UNLIKELY(fpu.tags[TOP] != TAG_Empty)) E_Exit("FPU stack overflow");
 	fpu.tags[TOP] = TAG_Valid;
 }
 
 static void FPU_PUSH(double in){
-   FPU_PREP_PUSH();
+	FPU_PREP_PUSH();
 	fpu.regs[TOP].d = in;
 //	LOG(LOG_FPU,LOG_ERROR)("Pushed at %d  %g to the stack",newtop,in);
 	return;
 }
 
+
 static void FPU_FPOP(void){
-   //not needed and causing crashes  //dosbox-x doesnt have this
-   //if (GCC_UNLIKELY(fpu.tags[TOP] == TAG_Empty)) E_Exit("FPU stack underflow");
+	if (GCC_UNLIKELY(fpu.tags[TOP] == TAG_Empty)) E_Exit("FPU stack underflow");
 	fpu.tags[TOP]=TAG_Empty;
 	//maybe set zero in it as well
 	TOP = ((TOP+1)&7);

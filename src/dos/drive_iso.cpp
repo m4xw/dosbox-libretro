@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2019  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,11 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
- *
- *  Wengier: LFN support
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -31,7 +29,6 @@
 #define FLAGS2	((iso) ? de->fileFlags : de->timeZone)
 
 using namespace std;
-char fullname[LFN_NAMELENGTH];
 
 class isoFile : public DOS_File {
 public:
@@ -257,16 +254,16 @@ bool isoDrive::FindFirst(char *dir, DOS_DTA &dta, bool fcb_findfirst) {
 	dta.SetDirID((Bit16u)dirIterator);
 
 	Bit8u attr;
-	char pattern[CROSS_LEN];
-	dta.GetSearchParams(attr, pattern,true);
-	
+	char pattern[ISO_MAXPATHNAME];
+	dta.GetSearchParams(attr, pattern);
+   
 	if (attr == DOS_ATTR_VOLUME) {
-		dta.SetResult(discLabel, discLabel, 0, 0, 0, DOS_ATTR_VOLUME);
+		dta.SetResult(discLabel, 0, 0, 0, DOS_ATTR_VOLUME);
 		return true;
 	} else if ((attr & DOS_ATTR_VOLUME) && isRoot && !fcb_findfirst) {
 		if (WildFileCmp(discLabel,pattern)) {
 			// Get Volume Label (DOS_ATTR_VOLUME) and only in basedir and if it matches the searchstring
-			dta.SetResult(discLabel, discLabel, 0, 0, 0, DOS_ATTR_VOLUME);
+			dta.SetResult(discLabel, 0, 0, 0, DOS_ATTR_VOLUME);
 			return true;
 		}
 	}
@@ -276,8 +273,8 @@ bool isoDrive::FindFirst(char *dir, DOS_DTA &dta, bool fcb_findfirst) {
 
 bool isoDrive::FindNext(DOS_DTA &dta) {
 	Bit8u attr;
-	char pattern[CROSS_LEN], findName[DOS_NAMELENGTH_ASCII], lfindName[ISO_MAXPATHNAME];
-	dta.GetSearchParams(attr, pattern, true);
+	char pattern[DOS_NAMELENGTH_ASCII];
+	dta.GetSearchParams(attr, pattern);
 	
 	int dirIterator = dta.GetDirID();
 	bool isRoot = dirIterators[dirIterator].root;
@@ -289,15 +286,12 @@ bool isoDrive::FindNext(DOS_DTA &dta) {
 		else findAttr |= DOS_ATTR_ARCHIVE;
 		if (IS_HIDDEN(FLAGS1)) findAttr |= DOS_ATTR_HIDDEN;
 
-		if (strcmp((char*)de.ident,(char*)fullname))
-			strcpy(lfindName,fullname);
-		else
-			GetLongName((char*)de.ident,lfindName);
-		if (!IS_ASSOC(FLAGS1) && !(isRoot && de.ident[0]=='.') && (WildFileCmp((char*)de.ident, pattern) || LWildFileCmp(lfindName, pattern))
+		if (!IS_ASSOC(FLAGS1) && !(isRoot && de.ident[0]=='.') && WildFileCmp((char*)de.ident, pattern)
 			&& !(~attr & findAttr & (DOS_ATTR_DIRECTORY | DOS_ATTR_HIDDEN | DOS_ATTR_SYSTEM))) {
 			
-			findName[0] = 0;
 			/* file is okay, setup everything to be copied in DTA Block */
+			char findName[DOS_NAMELENGTH_ASCII];		
+			findName[0] = 0;
 			if(strlen((char*)de.ident) < DOS_NAMELENGTH_ASCII) {
 				strcpy(findName, (char*)de.ident);
 				upcase(findName);
@@ -305,7 +299,7 @@ bool isoDrive::FindNext(DOS_DTA &dta) {
 			Bit32u findSize = DATA_LENGTH(de);
 			Bit16u findDate = DOS_PackDate(1900 + de.dateYear, de.dateMonth, de.dateDay);
 			Bit16u findTime = DOS_PackTime(de.timeHour, de.timeMin, de.timeSec);
-			dta.SetResult(findName, lfindName, findSize, findDate, findTime, findAttr);
+			dta.SetResult(findName, findSize, findDate, findTime, findAttr);
 			return true;
 		}
 	}
@@ -331,19 +325,6 @@ bool isoDrive::GetFileAttr(char *name, Bit16u *attr) {
 		if (IS_DIR(FLAGS1)) *attr |= DOS_ATTR_DIRECTORY;
 	}
 	return success;
-}
-
-bool isoDrive::GetFileAttrEx(char* name, struct stat *status) {
-	return false;
-}
-
-Bit32u isoDrive::GetCompressedSize(char* name) {
-	return 0;
-}
-
-void* isoDrive::CreateOpenFile(const char* name) {
-	DOS_SetError(1);
-	return NULL;
 }
 
 bool isoDrive::AllocationInfo(Bit16u *bytes_sector, Bit8u *sectors_cluster, Bit16u *total_clusters, Bit16u *free_clusters) {
@@ -418,7 +399,6 @@ bool isoDrive::GetNextDirEntry(const int dirIteratorHandle, isoDirEntry* de) {
 	bool result = false;
 	Bit8u* buffer = NULL;
 	DirIterator& dirIterator = dirIterators[dirIteratorHandle];
-	fullname[0]=0;
 	
 	// check if the directory entry is valid
 	if (dirIterator.valid && ReadCachedSector(&buffer, dirIterator.currentSector)) {
@@ -511,7 +491,6 @@ int isoDrive :: readDirEntry(isoDirEntry *de, Bit8u *data) {
 			if (de->ident[tmp - 1] == '.') de->ident[tmp - 1] = 0;
 		}
 	}
-	strcpy((char*)fullname,(char*)de->ident);
 	char* dotpos = strchr((char*)de->ident, '.');
 	if (dotpos!=NULL) {
 		if (strlen(dotpos)>4) dotpos[4]=0;
@@ -542,7 +521,7 @@ bool isoDrive :: lookup(isoDirEntry *de, const char *path) {
 	*de = this->rootEntry;
 	if (!strcmp(path, "")) return true;
 	
-	char isoPath[ISO_MAXPATHNAME], longname[ISO_MAXPATHNAME];
+	char isoPath[ISO_MAXPATHNAME];
 	safe_strncpy(isoPath, path, ISO_MAXPATHNAME);
 	strreplace(isoPath, '\\', '/');
 	
@@ -562,8 +541,7 @@ bool isoDrive :: lookup(isoDirEntry *de, const char *path) {
 			// look for the current path element
 			int dirIterator = GetDirIterator(de);
 			while (!found && GetNextDirEntry(dirIterator, de)) {
-				GetLongName((char*)de->ident,longname);
-				if (!IS_ASSOC(FLAGS2) && (0 == strncasecmp((char*) de->ident, name, ISO_MAX_FILENAME_LENGTH)) ||0 == strncasecmp((char*) longname, name, ISO_MAXPATHNAME)) {
+				if (!IS_ASSOC(FLAGS2) && (0 == strncasecmp((char*) de->ident, name, ISO_MAX_FILENAME_LENGTH))) {
 					found = true;
 				}
 			}
@@ -572,18 +550,4 @@ bool isoDrive :: lookup(isoDirEntry *de, const char *path) {
 		if (!found) return false;
 	}
 	return true;
-}
-
-void isoDrive :: GetLongName(char *ident, char *lfindName) {
-	char *c=ident+strlen(ident);
-	int i,j=222-strlen(ident)-6;
-	for (i=5;i<j;i++) {
-		if (*(c+i)=='N'&&*(c+i+1)=='M'&&*(c+i+2)>0&&*(c+i+3)==1&&*(c+i+4)==0&&*(c+i+5)>0)
-			break;
-		}
-	if (i<j&&strcmp(ident,".")&&strcmp(ident,"..")) {
-		strncpy(lfindName,c+i+5,*(c+i+2)-5);
-		lfindName[*(c+i+2)-5]=0;
-	} else
-		strcpy(lfindName,ident);
 }

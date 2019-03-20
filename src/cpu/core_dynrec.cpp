@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2019  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -138,7 +138,7 @@ static struct {
 #define MIPSEL		0x03
 #define ARMV4LE		0x04
 #define ARMV7LE		0x05
-#define POWERPC		0x04
+#define ARMV8LE		0x07
 
 #if C_TARGETCPU == X86_64
 #include "core_dynrec/risc_x64.h"
@@ -148,8 +148,8 @@ static struct {
 #include "core_dynrec/risc_mipsel32.h"
 #elif (C_TARGETCPU == ARMV4LE) || (C_TARGETCPU == ARMV7LE)
 #include "core_dynrec/risc_armv4le.h"
-#elif C_TARGETCPU == POWERPC
-#include "core_dynrec/risc_ppc.h"
+#elif C_TARGETCPU == ARMV8LE
+#include "core_dynrec/risc_armv8le.h"
 #endif
 
 #include "core_dynrec/decoder.h"

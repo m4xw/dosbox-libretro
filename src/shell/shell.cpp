@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2019  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,11 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
- *
- *  Wengier: LFN and AUTO MOUNT support, MISC FIX
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -93,14 +91,28 @@ void AutoexecObject::CreateAutoexec(void) {
 	//Create a new autoexec.bat
 	autoexec_data[0] = 0;
 	size_t auto_len;
-	for(auto_it it=  autoexec_strings.begin(); it != autoexec_strings.end(); it++) {
+	for(auto_it it = autoexec_strings.begin(); it != autoexec_strings.end(); it++) {
+
+		std::string linecopy = (*it);
+		std::string::size_type offset = 0;
+		//Lets have \r\n as line ends in autoexec.bat.
+		while(offset < linecopy.length()) {
+			std::string::size_type  n = linecopy.find("\n",offset);
+			if ( n == std::string::npos ) break;
+			std::string::size_type rn = linecopy.find("\r\n",offset);
+			if ( rn != std::string::npos && rn + 1 == n) {offset = n + 1; continue;}
+			// \n found without matching \r
+			linecopy.replace(n,1,"\r\n");
+			offset = n + 2;
+		}
+
 		auto_len = strlen(autoexec_data);
-		if ((auto_len+(*it).length()+3)>AUTOEXEC_SIZE) {
+		if ((auto_len+linecopy.length() + 3) > AUTOEXEC_SIZE) {
 			E_Exit("SYSTEM:Autoexec.bat file overflow");
 		}
-		sprintf((autoexec_data+auto_len),"%s\r\n",(*it).c_str());
+		sprintf((autoexec_data + auto_len),"%s\r\n",linecopy.c_str());
 	}
-	if(first_shell) VFILE_Register("AUTOEXEC.BAT",(Bit8u *)autoexec_data,(Bit32u)strlen(autoexec_data));
+	if (first_shell) VFILE_Register("AUTOEXEC.BAT",(Bit8u *)autoexec_data,(Bit32u)strlen(autoexec_data));
 }
 
 AutoexecObject::~AutoexecObject(){
@@ -356,14 +368,25 @@ public:
 		char * extra = const_cast<char*>(section->data.c_str());
 		if (extra && !secure && !control->cmdline->FindExist("-noautoexec",true)) {
 			/* detect if "echo off" is the first line */
+			size_t firstline_length = strcspn(extra,"\r\n");
 			bool echo_off  = !strncasecmp(extra,"echo off",8);
-			if (!echo_off) echo_off = !strncasecmp(extra,"@echo off",9);
+			if (echo_off && firstline_length == 8) extra += 8;
+			else {
+				echo_off = !strncasecmp(extra,"@echo off",9);
+				if (echo_off && firstline_length == 9) extra += 9;
+				else echo_off = false;
+			}
 
-			/* if "echo off" add it to the front of autoexec.bat */
-			if(echo_off) autoexec_echo.InstallBefore("@echo off");
+			/* if "echo off" move it to the front of autoexec.bat */
+			if (echo_off)  { 
+				autoexec_echo.InstallBefore("@echo off");
+				if (*extra == '\r') extra++; //It can point to \0
+				if (*extra == '\n') extra++; //same
+			}
 
-			/* Install the stuff from the configfile */
-			autoexec[0].Install(section->data);
+			/* Install the stuff from the configfile if anything left after moving echo off */
+
+			if (*extra) autoexec[0].Install(std::string(extra));
 		}
 
 		/* Check to see for extra command line options to be added (before the command specified on commandline) */
@@ -392,11 +415,8 @@ public:
 			if (line.length() > CROSS_LEN) continue;
 			strcpy(buffer,line.c_str());
 			if (stat(buffer,&test)) {
-#if defined(VITA)
-            strcpy(buffer,"ux0:/data/retroarch/");
-#else
-            getcwd(buffer,CROSS_LEN);
-#endif
+				if (getcwd(buffer,CROSS_LEN) == NULL) continue;
+				if (strlen(buffer) + line.length() + 1 > CROSS_LEN) continue;
 				strcat(buffer,cross_filesplit);
 				strcat(buffer,line.c_str());
 				if (stat(buffer,&test)) continue;
@@ -410,11 +430,7 @@ public:
 				char* name = strrchr(buffer,CROSS_FILESPLIT);
 				if (!name) { //Only a filename
 					line = buffer;
-#if defined(VITA)
-               strcpy(buffer, "ux0:/data/retroarch/");
-#else
 					if (getcwd(buffer,CROSS_LEN) == NULL) continue;
-#endif
 					if (strlen(buffer) + line.length() + 1 > CROSS_LEN) continue;
 					strcat(buffer,cross_filesplit);
 					strcat(buffer,line.c_str());
@@ -482,9 +498,9 @@ static Bitu INT2E_Handler(void) {
 
 	/* Read and fix up command string */
 	CommandTail tail;
-	MEM_BlockRead(PhysMake(dos.psp(),CTBUF+1),&tail,CTBUF+1);
-	if (tail.count<CTBUF) tail.buffer[tail.count]=0;
-	else tail.buffer[CTBUF-1]=0;
+	MEM_BlockRead(PhysMake(dos.psp(),128),&tail,128);
+	if (tail.count<127) tail.buffer[tail.count]=0;
+	else tail.buffer[126]=0;
 	char* crlf=strpbrk(tail.buffer,"\r\n");
 	if (crlf) *crlf=0;
 
@@ -518,7 +534,7 @@ void SHELL_Init() {
 	MSG_Add("SHELL_MISSING_PARAMETER","Required parameter missing.\n");
 	MSG_Add("SHELL_CMD_CHDIR_ERROR","Unable to change to: %s.\n");
 	MSG_Add("SHELL_CMD_CHDIR_HINT","Hint: To change to different drive type \033[31m%c:\033[0m\n");
-	MSG_Add("SHELL_CMD_CHDIR_HINT_2","directoryname contains unquoted spaces.\nTry \033[31mcd %s\033[0m or properly quote them with quotation marks.\n");
+	MSG_Add("SHELL_CMD_CHDIR_HINT_2","directoryname is longer than 8 characters and/or contains spaces.\nTry \033[31mcd %s\033[0m\n");
 	MSG_Add("SHELL_CMD_CHDIR_HINT_3","You are still on drive Z:, change to a mounted drive with \033[31mC:\033[0m.\n");
 	MSG_Add("SHELL_CMD_DATE_HELP","Displays or changes the internal date.\n");
 	MSG_Add("SHELL_CMD_DATE_ERROR","The specified date is not correct.\n");
@@ -554,12 +570,6 @@ void SHELL_Init() {
 	MSG_Add("SHELL_CMD_DIR_BYTES_USED","%5d File(s) %17s Bytes.\n");
 	MSG_Add("SHELL_CMD_DIR_BYTES_FREE","%5d Dir(s)  %17s Bytes free.\n");
 	MSG_Add("SHELL_EXECUTE_DRIVE_NOT_FOUND","Drive %c does not exist!\nYou must \033[31mmount\033[0m it first. Type \033[1;33mintro\033[0m or \033[1;33mintro mount\033[0m for more information.\n");
-	MSG_Add("SHELL_EXECUTE_AUTOMOUNT","Automatic drive mounting is turned on.");
-	MSG_Add("SHELL_EXECUTE_DRIVE_ACCESS_REMOVABLE","Do you want to give DOSBox access to your real removable drive %c [Y/N]?");
-	MSG_Add("SHELL_EXECUTE_DRIVE_ACCESS_NETWORK","Do you want to give DOSBox access to your real network drive %c [Y/N]?");
-	MSG_Add("SHELL_EXECUTE_DRIVE_ACCESS_OPTICAL","Do you want to give DOSBox access to your real optical drive %c [Y/N]?");
-	MSG_Add("SHELL_EXECUTE_DRIVE_ACCESS_LOCAL","Do you want to give DOSBox access to your real local drive %c [Y/N]?");
-	MSG_Add("SHELL_EXECUTE_DRIVE_ACCESS_WARNING_WIN"," But mounting c:\\ is NOT recommended.");
 	MSG_Add("SHELL_EXECUTE_ILLEGAL_COMMAND","Illegal command: %s.\n");
 	MSG_Add("SHELL_CMD_PAUSE","Press any key to continue.\n");
 	MSG_Add("SHELL_CMD_PAUSE_HELP","Waits for 1 keystroke to continue.\n");
@@ -572,7 +582,7 @@ void SHELL_Init() {
 		"\033[44;1m\xC9\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD"
 		"\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD"
 		"\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xBB\n"
-		"\xBA \033[32mWelcome to DOSBox %s-lfn\033[37m                                 \xBA\n"
+		"\xBA \033[32mWelcome to DOSBox %-8s\033[37m                                     \xBA\n"
 		"\xBA                                                                    \xBA\n"
 //		"\xBA DOSBox runs real and protected mode games.                         \xBA\n"
 		"\xBA For a short introduction for new users type: \033[33mINTRO\033[37m                 \xBA\n"
@@ -596,15 +606,14 @@ void SHELL_Init() {
 	        "\xBA                                                                    \xBA\n"
 	);
 	MSG_Add("SHELL_STARTUP_END",
-	        "\xBA \033[32mDOSBox SVN-lfn: \033[33mhttp://www.wpdos.org/dosbox-vdos-lfn.html\033[37m          \xBA\n"
-	        "\xBA \033[32mThe DOSBox Team \033[33mhttp://www.dosbox.com\033[37m                              \xBA\n"
 	        "\xBA \033[32mHAVE FUN!\033[37m                                                          \xBA\n"
+	        "\xBA \033[32mThe DOSBox Team \033[33mhttp://www.dosbox.com\033[37m                              \xBA\n"
 	        "\xC8\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD"
 	        "\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD"
 	        "\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xCD\xBC\033[0m\n"
 	        //"\n" //Breaks the startup message if you type a mount and a drive change.
 	);
-	MSG_Add("SHELL_STARTUP_SUB","\n\n\033[32;1mDOSBox %s-lfn Command Shell\033[0m\n\n");
+	MSG_Add("SHELL_STARTUP_SUB","\n\n\033[32;1mDOSBox %s Command Shell\033[0m\n\n");
 	MSG_Add("SHELL_CMD_CHDIR_HELP","Displays/changes the current directory.\n");
 	MSG_Add("SHELL_CMD_CHDIR_HELP_LONG","CHDIR [drive:][path]\n"
 	        "CHDIR [..]\n"
@@ -651,7 +660,7 @@ void SHELL_Init() {
 	MSG_Add("SHELL_CMD_ATTRIB_HELP","Does nothing. Provided for compatibility.\n");
 	MSG_Add("SHELL_CMD_PATH_HELP","Provided for compatibility.\n");
 	MSG_Add("SHELL_CMD_VER_HELP","View and set the reported DOS version.\n");
-	MSG_Add("SHELL_CMD_VER_VER","DOSBox version %s-lfn. Reported DOS version %d.%02d. LFN support %s.\n");
+	MSG_Add("SHELL_CMD_VER_VER","DOSBox version %s. Reported DOS version %d.%02d.\n");
 
 	/* Regular startup */
 	call_shellstop=CALLBACK_Allocate();
@@ -728,12 +737,12 @@ void SHELL_Init() {
 	/* Set the command line for the shell start up */
 	CommandTail tail;
 	tail.count=(Bit8u)strlen(init_line);
-	memset(&tail.buffer,0,CTBUF);
+	memset(&tail.buffer,0,127);
 	strcpy(tail.buffer,init_line);
-	MEM_BlockWrite(PhysMake(psp_seg,CTBUF+1),&tail,CTBUF+1);
+	MEM_BlockWrite(PhysMake(psp_seg,128),&tail,128);
 
 	/* Setup internal DOS Variables */
-	dos.dta(RealMake(psp_seg,CTBUF+1));
+	dos.dta(RealMake(psp_seg,0x80));
 	dos.psp(psp_seg);
 
 

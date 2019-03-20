@@ -157,7 +157,6 @@ else ifeq ($(platform), libnx)
 	CFLAGS += -g -O2 -fPIE -I$(LIBNX)/include/ -ffunction-sections -fdata-sections -ftls-model=local-exec -Wl,--allow-multiple-definition -specs=$(LIBNX)/switch.specs
 	CFLAGS += $(INCLUDE) -D__SWITCH__ -DHAVE_LIBNX
 	CXXFLAGS += $(ASFLAGS) $(CFLAGS) -std=gnu++11
-	CFLAGS += -std=gnu11
 	WITH_DYNAREC =
 	STATIC_LINKING = 1
 else ifeq ($(platform), emscripten)

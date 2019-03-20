@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2019  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -58,7 +58,7 @@ static void TANDY16_CopyRow(Bit8u cleft,Bit8u cright,Bit8u rold,Bit8u rnew,PhysP
 	PhysPt dest=base+((CurMode->twidth*rnew)*(cheight/banks)+cleft)*4;
 	PhysPt src=base+((CurMode->twidth*rold)*(cheight/banks)+cleft)*4;
 	Bitu copy=(cright-cleft)*4;Bitu nextline=CurMode->twidth*4;
-	for (Bitu i=0;i<cheight/banks;i++) {
+	for (Bitu i=0;i<static_cast<Bitu>(cheight/banks);i++) {
 		for (Bitu b=0;b<banks;b++) MEM_BlockCopy(dest+b*8*1024,src+b*8*1024,copy);
 		dest+=nextline;src+=nextline;
 	}
@@ -140,7 +140,7 @@ static void TANDY16_FillRow(Bit8u cleft,Bit8u cright,Bit8u row,PhysPt base,Bit8u
 	PhysPt dest=base+((CurMode->twidth*row)*(cheight/banks)+cleft)*4;
 	Bitu copy=(cright-cleft)*4;Bitu nextline=CurMode->twidth*4;
 	attr=(attr & 0xf) | (attr & 0xf) << 4;
-	for (Bitu i=0;i<cheight/banks;i++) {
+	for (Bitu i=0;i<static_cast<Bitu>(cheight/banks);i++) {
 		for (Bitu x=0;x<copy;x++) {
 			for (Bitu b=0;b<banks;b++) mem_writeb(dest+b*8*1024+x,attr);
 		}
@@ -624,6 +624,11 @@ void INT10_WriteChar(Bit8u chr,Bit8u attr,Bit8u page,Bit16u count,bool showattr)
 			cur_col=0;
 			cur_row++;
 		}
+	}
+
+	if (CurMode->type==M_EGA) {
+		// Reset write ops for EGA graphics modes
+		IO_Write(0x3ce,0x3);IO_Write(0x3cf,0x0);
 	}
 }
 

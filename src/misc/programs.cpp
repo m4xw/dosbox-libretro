@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2019  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,11 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
- *
- *  Wengier: MISC FIX
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -34,10 +32,11 @@
 #include "control.h"
 #include "shell.h"
 
-//fix for functions that are not the same in all versions of libc
-#include "nonlibc.h"
-
 Bitu call_program;
+
+#ifdef ANDROID
+#include "nonlibc.h"
+#endif
 
 /* This registers a file on the virtual drive and creates the correct structure for it*/
 
@@ -103,9 +102,9 @@ Program::Program() {
 	while (mem_readb(envscan)) envscan+=mem_strlen(envscan)+1;	
 	envscan+=3;
 	CommandTail tail;
-	MEM_BlockRead(PhysMake(dos.psp(),CTBUF+1),&tail,CTBUF+1);
-	if (tail.count<CTBUF) tail.buffer[tail.count]=0;
-	else tail.buffer[CTBUF-1]=0;
+	MEM_BlockRead(PhysMake(dos.psp(),128),&tail,128);
+	if (tail.count<127) tail.buffer[tail.count]=0;
+	else tail.buffer[126]=0;
 	char filename[256+1];
 	MEM_StrCopy(envscan,filename,256);
 	cmd = new CommandLine(filename,tail.buffer);
@@ -139,10 +138,15 @@ void Program::WriteOut(const char * format,...) {
 	va_list msg;
 	
 	va_start(msg,format);
+#ifdef ANDROID
 	portable_vsnprintf(buf,2047,format,msg);
+#else
+	vsnprintf(buf,2047,format,msg);
+#endif
 	va_end(msg);
 
 	Bit16u size = (Bit16u)strlen(buf);
+	dos.internal_output=true;
 	for(Bit16u i = 0; i < size;i++) {
 		Bit8u out;Bit16u s=1;
 		if (buf[i] == 0xA && last_written_character != 0xD) {
@@ -151,6 +155,7 @@ void Program::WriteOut(const char * format,...) {
 		last_written_character = out = buf[i];
 		DOS_WriteFile(STDOUT,&out,&s);
 	}
+	dos.internal_output=false;
 	
 //	DOS_WriteFile(STDOUT,(Bit8u *)buf,&size);
 }
@@ -158,6 +163,7 @@ void Program::WriteOut(const char * format,...) {
 void Program::WriteOut_NoParsing(const char * format) {
 	Bit16u size = (Bit16u)strlen(format);
 	char const* buf = format;
+	dos.internal_output=true;
 	for(Bit16u i = 0; i < size;i++) {
 		Bit8u out;Bit16u s=1;
 		if (buf[i] == 0xA && last_written_character != 0xD) {
@@ -166,6 +172,7 @@ void Program::WriteOut_NoParsing(const char * format) {
 		last_written_character = out = buf[i];
 		DOS_WriteFile(STDOUT,&out,&s);
 	}
+	dos.internal_output=false;
 
 //	DOS_WriteFile(STDOUT,(Bit8u *)format,&size);
 }

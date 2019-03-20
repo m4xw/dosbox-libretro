@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2019  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -510,14 +510,14 @@ static void cache_init(bool enable) {
 #endif
 			if(!cache_code_start_ptr) E_Exit("Allocating dynamic core cache memory failed");
 
-         cache_code=(Bit8u*)(((Bitu)cache_code_start_ptr + PAGESIZE_TEMP-1) & ~(PAGESIZE_TEMP-1)); //Bitu is same size as a pointer.
+			cache_code=(Bit8u*)(((Bitu)cache_code_start_ptr + PAGESIZE_TEMP-1) & ~(PAGESIZE_TEMP-1)); //Bitu is same size as a pointer.
 
 			cache_code_link_blocks=cache_code;
 			cache_code+=PAGESIZE_TEMP;
 
 #if (C_HAVE_MPROTECT)
 			if(mprotect(cache_code_link_blocks,CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP,PROT_WRITE|PROT_READ|PROT_EXEC))
-				LOG_MSG("Setting excute permission on the code cache has failed!");
+				LOG_MSG("Setting execute permission on the code cache has failed!");
 #endif
 			CacheBlock * block=cache_getblock();
 			cache.block.first=block;
@@ -605,14 +605,14 @@ static void cache_reset(void) {
 #endif
 			if (!cache_code_start_ptr) E_Exit("Allocating dynamic core cache memory failed");
 
-         cache_code=(Bit8u*)(((Bitu)cache_code_start_ptr + PAGESIZE_TEMP-1) & ~(PAGESIZE_TEMP-1)); //Bitu is same size as a pointer.
+			cache_code=(Bit8u*)(((Bitu)cache_code_start_ptr + PAGESIZE_TEMP-1) & ~(PAGESIZE_TEMP-1)); //Bitu is same size as a pointer.
 
 			cache_code_link_blocks=cache_code;
 			cache_code+=PAGESIZE_TEMP;
 
 #if (C_HAVE_MPROTECT)
 			if(mprotect(cache_code_link_blocks,CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP,PROT_WRITE|PROT_READ|PROT_EXEC))
-				LOG_MSG("Setting excute permission on the code cache has failed!");
+				LOG_MSG("Setting execute permission on the code cache has failed!");
 #endif
 		}
 

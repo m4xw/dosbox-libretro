@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2019  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,15 +11,11 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-#ifdef HAVE_MMAP
-// Use anonymous mmap to allocate executable memory pages
-#include <sys/mman.h>
-#endif
 
 class CodePageHandlerDynRec;	// forward
 
@@ -566,8 +562,6 @@ static void dyn_run_code(void);
 #define PAGESIZE_TEMP 4096
 #endif
 
-enum { CACHE_CODE_SIZE = CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP-1+PAGESIZE_TEMP };
-
 static bool cache_initialized = false;
 
 static void cache_init(bool enable) {
@@ -596,12 +590,8 @@ static void cache_init(bool enable) {
 				MEM_COMMIT,PAGE_EXECUTE_READWRITE);
 			if (!cache_code_start_ptr)
 				cache_code_start_ptr=(Bit8u*)malloc(CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP-1+PAGESIZE_TEMP);
-#elif defined (HAVE_MMAP)
-			cache_code_start_ptr=(Bit8u*)mmap(
-				0, CACHE_CODE_SIZE,
-				PROT_READ|PROT_WRITE|PROT_EXEC, MAP_ANON, -1, 0);
 #else
-			cache_code_start_ptr=(Bit8u*)malloc(CACHE_CODE_SIZE);
+			cache_code_start_ptr=(Bit8u*)malloc(CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP-1+PAGESIZE_TEMP);
 #endif
 			if(!cache_code_start_ptr) E_Exit("Allocating dynamic cache failed");
 
@@ -613,7 +603,7 @@ static void cache_init(bool enable) {
 
 #if (C_HAVE_MPROTECT)
 			if(mprotect(cache_code_link_blocks,CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP,PROT_WRITE|PROT_READ|PROT_EXEC))
-				LOG_MSG("Setting excute permission on the code cache has failed");
+				LOG_MSG("Setting execute permission on the code cache has failed");
 #endif
 			CacheBlockDynRec * block=cache_getblock();
 			cache.block.first=block;
@@ -666,11 +656,7 @@ static void cache_close(void) {
 	if (cache_code_start_ptr != NULL) {
 		### care: under windows VirtualFree() has to be used if
 		###       VirtualAlloc was used for memory allocation
-#if defined (HAVE_MMAP)
-		munmap(cache_code_start_ptr, CACHE_CODE_SIZE);
-#else
 		free(cache_code_start_ptr);
-#endif
 		cache_code_start_ptr = NULL;
 	}
 	cache_code = NULL;

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2019  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 /* Do the actual opcode */
@@ -603,15 +603,15 @@ switch (inst.code.op) {
 		inst_op1_d&=~(1 << (inst_op2_d & 31));
 		break;
 	case O_BSWAPw:
-		if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLD) goto illegalopcode;
+		if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLDSLOW) goto illegalopcode;
 		BSWAPW(inst_op1_w);
 		break;
 	case O_BSWAPd:
-		if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLD) goto illegalopcode;
+		if (CPU_ArchitectureType<CPU_ARCHTYPE_486OLDSLOW) goto illegalopcode;
 		BSWAPD(inst_op1_d);
 		break;
 	case O_CMPXCHG:
-		if (CPU_ArchitectureType<CPU_ARCHTYPE_486NEW) goto illegalopcode;
+		if (CPU_ArchitectureType<CPU_ARCHTYPE_486NEWSLOW) goto illegalopcode;
 		FillFlags();
 		if (inst_op1_d==reg_eax) {
 			inst_op1_d=reg_32(inst.rm_index);

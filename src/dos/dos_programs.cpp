@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2015  The DOSBox Team
+ *  Copyright (C) 2002-2019  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,11 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
- *
- *  Wengier: LFN and AUTO MOUNT support
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -58,14 +56,12 @@
 Bitu DEBUG_EnableDebugger(void);
 #endif
 
-void MSCDEX_SetCDInterface(int intNr, int forceCD);
 static Bitu ZDRIVE_NUM = 25;
 
 class MOUNT : public Program {
 public:
 	void ListMounts(void) {
-		char name[DOS_NAMELENGTH_ASCII],lname[LFN_NAMELENGTH];
-		Bit32u size;Bit16u date;Bit16u time;Bit8u attr;
+		char name[DOS_NAMELENGTH_ASCII];Bit32u size;Bit16u date;Bit16u time;Bit8u attr;
 		/* Command uses dta so set it to our internal dta */
 		RealPt save_dta = dos.dta();
 		dos.dta(dos.tables.tempdta);
@@ -78,10 +74,10 @@ public:
 		for (int d = 0;d < DOS_DRIVES;d++) {
 			if (!Drives[d]) continue;
 
-			char root[7] = {'A'+d,':','\\','*','.','*',0};
+			char root[7] = {static_cast<char>('A'+d),':','\\','*','.','*',0};
 			bool ret = DOS_FindFirst(root,DOS_ATTR_VOLUME);
 			if (ret) {
-				dta.GetResult(name,lname,size,date,time,attr);
+				dta.GetResult(name,size,date,time,attr);
 				DOS_FindNext(); //Mark entry as invalid
 			} else name[0] = 0;
 
@@ -129,6 +125,7 @@ public:
 					switch (DriveManager::UnmountDrive(i_drive)) {
 					case 0:
 						Drives[i_drive] = 0;
+						mem_writeb(Real2Phys(dos.tables.mediaid)+i_drive*9,0);
 						if(i_drive == DOS_GetDefaultDrive()) 
 							DOS_SetDrive(ZDRIVE_NUM);
 						WriteOut(MSG_Get("PROGRAM_MOUNT_UMOUNT_SUCCESS"),umount[0]);
@@ -397,7 +394,7 @@ public:
 		if (!newdrive) E_Exit("DOS:Can't create drive");
 		Drives[drive-'A']=newdrive;
 		/* Set the correct media byte in the table */
-		mem_writeb(Real2Phys(dos.tables.mediaid)+(drive-'A')*2,newdrive->GetMediaByte());
+		mem_writeb(Real2Phys(dos.tables.mediaid)+(drive-'A')*9,newdrive->GetMediaByte());
 		WriteOut(MSG_Get("PROGRAM_MOUNT_STATUS_2"),drive,newdrive->GetInfo());
 		/* check if volume label is given and don't allow it to updated in the future */
 		if (cmd->FindString("-label",label,true)) newdrive->dirCache.SetLabel(label.c_str(),iscdrom,false);
@@ -406,7 +403,7 @@ public:
 		 * This way every drive except cdroms should get a label.*/
 		else if(type == "dir") { 
 			label = drive; label += "_DRIVE";
-			newdrive->dirCache.SetLabel(label.c_str(),iscdrom,true);
+			newdrive->dirCache.SetLabel(label.c_str(),iscdrom,false);
 		} else if(type == "floppy") {
 			label = drive; label += "_FLOPPY";
 			newdrive->dirCache.SetLabel(label.c_str(),iscdrom,true);
@@ -443,9 +440,7 @@ public:
 
 		Bit16u seg,blocks;blocks=0xffff;
 		DOS_AllocateMemory(&seg,&blocks);
-		if ((machine==MCH_PCJR) && (real_readb(0x2000,0)==0x5a) && (real_readw(0x2000,1)==0) && (real_readw(0x2000,3)==0x7ffe)) {
-			WriteOut(MSG_Get("PROGRAM_MEM_CONVEN"),0x7ffe*16/1024);
-		} else WriteOut(MSG_Get("PROGRAM_MEM_CONVEN"),blocks*16/1024);
+		WriteOut(MSG_Get("PROGRAM_MEM_CONVEN"),blocks*16/1024);
 
 		if (umb_start!=0xffff) {
 			DOS_LinkUMBsToMemChain(1);
@@ -911,7 +906,7 @@ public:
 			/* try to identify ROM type */
 			PhysPt rom_base = 0;
 			if (data_read >= 0x4000 && rom_buffer[0] == 0x55 && rom_buffer[1] == 0xaa &&
-				rom_buffer[3] == 0xeb && strncmp((char*)(&rom_buffer[0x1e]), "IBM", 3) == 0) {
+				(rom_buffer[3] & 0xfc) == 0xe8 && strncmp((char*)(&rom_buffer[0x1e]), "IBM", 3) == 0) {
 
 				if (!IS_EGAVGA_ARCH) {
 					WriteOut(MSG_Get("PROGRAM_LOADROM_INCOMPATIBLE"));
@@ -1229,7 +1224,7 @@ public:
 						Bit8u dummy;
 						if (!DOS_MakeName(tmp, fullname, &dummy) || strncmp(Drives[dummy]->GetInfo(),"local directory",15)) {
 							WriteOut(MSG_Get("PROGRAM_IMGMOUNT_NON_LOCAL_DRIVE"));
-							return;
+							/* return; */
 						}
 
 						localDrive *ldp = dynamic_cast<localDrive*>(Drives[dummy]);
@@ -1317,14 +1312,14 @@ public:
 				DriveManager::InitializeDrive(drive - 'A');
 
 				// Set the correct media byte in the table 
-				mem_writeb(Real2Phys(dos.tables.mediaid) + (drive - 'A') * 2, mediaid);
+				mem_writeb(Real2Phys(dos.tables.mediaid) + (drive - 'A') * 9, mediaid);
 				
 				/* Command uses dta so set it to our internal dta */
 				RealPt save_dta = dos.dta();
 				dos.dta(dos.tables.tempdta);
 
 				for(ct = 0; ct < imgDisks.size(); ct++) {
-					DriveManager::CycleAllDisks();
+					DriveManager::CycleDisks(drive - 'A', (ct == (imgDisks.size() - 1)));
 
 					char root[7] = {drive,':','\\','*','.','*',0};
 					DOS_FindFirst(root, DOS_ATTR_VOLUME); // force obtaining the label and saving it in dirCache
@@ -1339,20 +1334,22 @@ public:
 
 				if (paths.size() == 1) {
 					newdrive = imgDisks[0];
-					if(((fatDrive *)newdrive)->loadedDisk->hardDrive) {
-						if(imageDiskList[2] == NULL) {
-							imageDiskList[2] = ((fatDrive *)newdrive)->loadedDisk;
-							updateDPT();
-							return;
+					switch (drive - 'A') {
+					case 0:
+					case 1:
+						if(!((fatDrive *)newdrive)->loadedDisk->hardDrive) {
+							if(imageDiskList[drive - 'A'] != NULL) delete imageDiskList[drive - 'A'];
+							imageDiskList[drive - 'A'] = ((fatDrive *)newdrive)->loadedDisk;
 						}
-						if(imageDiskList[3] == NULL) {
-							imageDiskList[3] = ((fatDrive *)newdrive)->loadedDisk;
+						break;
+					case 2:
+					case 3:
+						if(((fatDrive *)newdrive)->loadedDisk->hardDrive) {
+							if(imageDiskList[drive - 'A'] != NULL) delete imageDiskList[drive - 'A'];
+							imageDiskList[drive - 'A'] = ((fatDrive *)newdrive)->loadedDisk;
 							updateDPT();
-							return;
 						}
-					}
-					if(!((fatDrive *)newdrive)->loadedDisk->hardDrive) {
-						imageDiskList[0] = ((fatDrive *)newdrive)->loadedDisk;
+						break;
 					}
 				}
 			} else if (fstype=="iso") {
@@ -1395,7 +1392,7 @@ public:
 				DriveManager::InitializeDrive(drive - 'A');
 				
 				// Set the correct media byte in the table 
-				mem_writeb(Real2Phys(dos.tables.mediaid) + (drive - 'A') * 2, mediaid);
+				mem_writeb(Real2Phys(dos.tables.mediaid) + (drive - 'A') * 9, mediaid);
 				
 				// Print status message (success)
 				WriteOut(MSG_Get("MSCDEX_SUCCESS"));
@@ -1647,6 +1644,7 @@ void DOS_SetupPrograms(void) {
 		"\033[33;1mCTRL-F7\033[0m     : Decrease frameskip.\n"
 		"\033[33;1mCTRL-F8\033[0m     : Increase frameskip.\n"
 		"\033[33;1mCTRL-F9\033[0m     : Kill DOSBox.\n"
+		"\033[33;1mCTRL-F10\033[0m    : Capture/Release the mouse.\n"
 		"\033[33;1mCTRL-F11\033[0m    : Slow down emulation (Decrease DOSBox Cycles).\n"
 		"\033[33;1mCTRL-F12\033[0m    : Speed up emulation (Increase DOSBox Cycles).\n"
 		"\033[33;1mALT-F12\033[0m     : Unlock speed (turbo button/fast forward).\n"

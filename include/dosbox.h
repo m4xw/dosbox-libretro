@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2019  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,11 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
- *
- *  Wengier: LFN support
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -62,7 +60,6 @@ enum SVGACards {
 extern SVGACards svgaCard;
 extern MachineType machine;
 extern bool SDLNetInited;
-extern bool uselfn, autolfn;
 
 #define IS_TANDY_ARCH ((machine==MCH_TANDY) || (machine==MCH_PCJR))
 #define IS_EGAVGA_ARCH ((machine==MCH_EGA) || (machine==MCH_VGA))
@@ -74,5 +71,7 @@ extern bool uselfn, autolfn;
 #ifndef DOSBOX_LOGGING_H
 #include "logging.h"
 #endif // the logging system.
+
+void DOSBOX_UnlockSpeed( bool pressed );
 
 #endif /* DOSBOX_DOSBOX_H */

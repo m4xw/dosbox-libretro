@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2002-2013  The DOSBox Team
+ *  Copyright (C) 2002-2019  The DOSBox Team
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 
@@ -37,7 +37,7 @@ class device_NUL : public DOS_Device {
 public:
 	device_NUL() { SetName("NUL"); };
 	virtual bool Read(Bit8u * data,Bit16u * size) {
-      *size = 0; //Return success and no data read.
+		*size = 0; //Return success and no data read. 
 		LOG(LOG_IOCTL,LOG_NORMAL)("%s:READ",GetName());
 		return true;
 	}
@@ -59,10 +59,10 @@ class device_LPT1 : public device_NUL {
 public:
    	device_LPT1() { SetName("LPT1");}
 	Bit16u GetInformation(void) { return 0x80A0; }
-   bool Read(Bit8u* data,Bit16u * size){
-      DOS_SetError(DOSERR_ACCESS_DENIED);
-      return false;
-   }
+	bool Read(Bit8u* data,Bit16u * size){
+		DOS_SetError(DOSERR_ACCESS_DENIED);
+		return false;
+	}	
 };
 
 bool DOS_Device::Read(Bit8u * data,Bit16u * size) {
