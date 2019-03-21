@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <string>
 #include <stdlib.h>
+#include <stdarg.h>
 
 #ifdef _WIN32
 #include <direct.h>
@@ -40,6 +41,7 @@
 #include "pic.h"
 #include "joystick.h"
 #include "ints/int10.h"
+#include "dos/drives.h"
 #include "mem.h"
 
 #ifdef HAVE_LIBNX
@@ -117,6 +119,13 @@ unsigned currentWidth, currentHeight;
 static uint8_t audioData[829 * 4]; // 49716hz max
 static uint32_t samplesPerFrame = 735;
 
+/* disk-control variables */
+char disk_array[16][PATH_MAX_LENGTH];
+unsigned disk_index = 0;
+unsigned disk_count = 0;
+bool disk_tray_ejected;
+char disk_load_image[PATH_MAX_LENGTH];
+
 /* callbacks */
 void retro_set_video_refresh(retro_video_refresh_t cb) { video_cb = cb; }
 void retro_set_audio_sample(retro_audio_sample_t cb) { }
@@ -125,6 +134,39 @@ void retro_set_input_poll(retro_input_poll_t cb) { poll_cb = cb; }
 void retro_set_input_state(retro_input_state_t cb) { input_cb = cb; }
 
 /* helper functions */
+static char last_written_character = 0;
+
+void write_out_buffer(const char * format,...) {
+    char buf[2048];
+    va_list msg;
+
+    va_start(msg,format);
+#ifdef ANDROID
+    portable_vsnprintf(buf,2047,format,msg);
+#else
+    vsnprintf(buf,2047,format,msg);
+#endif
+    va_end(msg);
+
+    Bit16u size = (Bit16u)strlen(buf);
+    dos.internal_output=true;
+    for(Bit16u i = 0; i < size;i++) {
+        Bit8u out;Bit16u s=1;
+        if (buf[i] == 0xA && last_written_character != 0xD) {
+            out = 0xD;DOS_WriteFile(STDOUT,&out,&s);
+        }
+        last_written_character = out = buf[i];
+        DOS_WriteFile(STDOUT,&out,&s);
+    }
+    dos.internal_output=false;
+}
+
+void write_out (const char * format,...)
+{
+    write_out_buffer("\n");
+    write_out_buffer(format);
+}
+
 bool update_dosbox_variable(std::string section_string, std::string var_string, std::string val_string)
 {
     bool ret = false;
@@ -140,6 +182,267 @@ bool update_dosbox_variable(std::string section_string, std::string var_string, 
     }
     return ret;
 }
+
+/* disk control */
+bool mount_disk_image(char *path, bool silent)
+{
+    char msg[256];
+    std::string extension = strrchr(path, '.');
+    if (extension == ".img")
+        log_cb(RETRO_LOG_INFO, "[dosbox] mounting disk as floppy %s\n", path);
+#if 0
+    else if (extension == ".iso" || extension == ".cue")
+        log_cb(RETRO_LOG_INFO, "[dosbox] mounting disk as cdrom %s\n", path);
+#endif
+    else
+    {
+        log_cb(RETRO_LOG_INFO, "[dosbox] unsupported disk image\n %s", extension.c_str());
+        return false;
+    }
+
+    if(control->SecureMode())
+    {
+        if (log_cb)
+            log_cb(RETRO_LOG_INFO, "[dosbox] this operation is not permitted in secure mode\n");
+        return false;
+    }
+
+    if (disk_count == 0)
+    {
+        if (log_cb)
+            log_cb(RETRO_LOG_INFO, "[dosbox] no disks added to index\n");
+        return false;
+    }
+
+    char drive = 'A';
+    if (extension == ".img")
+    {
+
+        int error = -1;
+        Bit8u mediaid=0xF0;
+        Bit16u sizes[4];
+        std::string fstype="floppy";
+
+        std::string str_size;
+        std::string label;
+
+        DOS_Drive* floppy = new fatDrive(path, sizes[0],sizes[1],sizes[2],sizes[3],0);
+        if(!(dynamic_cast<fatDrive*>(floppy))->created_successfully)
+            return false;
+
+        DriveManager::AppendDisk(drive - 'A', floppy);
+        DriveManager::InitializeDrive(drive - 'A');
+
+        /* set the correct media byte in the table */
+        mem_writeb(Real2Phys(dos.tables.mediaid) + (drive - 'A') * 9, mediaid);
+
+        /* command uses dta so set it to our internal dta */
+        RealPt save_dta = dos.dta();
+        dos.dta(dos.tables.tempdta);
+
+        for(Bitu i = 0; i < DOS_DRIVES; i++)
+            if (Drives[i]) Drives[i]->EmptyCache();
+
+        DriveManager::CycleDisks(drive - 'A', true);
+
+        snprintf(msg, sizeof(msg), "Drive %c is mounted as %s.\n", drive, path);
+        if (!silent) write_out(msg);
+        return true;
+    }
+#if 0
+    else if (extension == ".iso" || extension == ".cue")
+    {
+        int error = -1;
+        char drive = 'D';
+
+        Bit8u mediaid = 0xF8;
+        std::string fstype="iso";
+
+        MSCDEX_SetCDInterface(CDROM_USE_SDL, -1);
+
+        DOS_Drive* iso = new isoDrive(drive, path, mediaid, error);
+        switch (error) {
+            case 0:    break;
+            case 1:
+                snprintf(msg, sizeof(msg), "MSCDEX: Failure: Drive-letters of multiple CD-ROM drives have to be continuous.\n");
+                log_cb(RETRO_LOG_INFO, "[dosbox] %s", msg);
+                if (!silent) write_out(msg);
+                return false;
+            case 2:
+                snprintf(msg, sizeof(msg), "MSCDEX: Failure: Not yet supported.");
+                log_cb(RETRO_LOG_INFO, "[dosbox] %s", msg);
+                if (!silent) write_out(msg);
+                return false;
+            case 3:
+                snprintf(msg, sizeof(msg), "MSCDEX: Specified location is not a CD-ROM drive.\n");
+                log_cb(RETRO_LOG_INFO, "[dosbox] %s", msg);
+                if (!silent) write_out(msg);
+                return false;
+            case 4:
+                snprintf(msg, sizeof(msg), "MSCDEX: Failure: Invalid file or unable to open.\n");
+                log_cb(RETRO_LOG_INFO, "[dosbox] %s", msg);
+                if (!silent) write_out(msg);
+                return false;
+            case 5:
+                snprintf(msg, sizeof(msg), "MSCDEX: Failure: Too many CD-ROM drives (max: 5). MSCDEX Installation failed.\n");
+                log_cb(RETRO_LOG_INFO, "[dosbox] %s", msg);
+                if (!silent) write_out(msg);
+                return false;
+            case 6:
+                snprintf(msg, sizeof(msg), "MSCDEX: Mounted subdirectory: limited support.\n");
+                log_cb(RETRO_LOG_INFO, "[dosbox] %s", msg);
+                if (!silent) write_out(msg);
+                return false;
+            default:
+                snprintf(msg, sizeof(msg), "MSCDEX: Failure: Unknown error.\n");
+                log_cb(RETRO_LOG_INFO, "[dosbox] %s", msg);
+                if (!silent) write_out(msg);
+                return false;
+        }
+
+        DriveManager::AppendDisk(drive - 'A', iso);
+        DriveManager::InitializeDrive(drive - 'A');
+
+        /* set the correct media byte in the table */
+        mem_writeb(Real2Phys(dos.tables.mediaid) + (drive - 'A') * 9, mediaid);
+
+        for(Bitu i = 0; i < DOS_DRIVES; i++)
+            if (Drives[i]) Drives[i]->EmptyCache();
+
+        DriveManager::CycleDisks(drive - 'A', true);
+
+        snprintf(msg, sizeof(msg), "Drive %c is mounted as %s.\n", drive, path);
+        log_cb(RETRO_LOG_INFO, "[dosbox] %s", msg);
+        if (!silent) write_out(msg);
+        return true;
+    }
+#endif
+    else
+        return false;
+    return false;
+}
+
+bool unmount_disk_image(char *path)
+{
+    char drive;
+    std::string extension = strrchr(path, '.');
+
+    if (disk_count == 0)
+    {
+        if (log_cb)
+            log_cb(RETRO_LOG_INFO, "[dosbox] no disks added to index\n");
+        return false;
+    }
+
+    if (extension == ".img")
+    {
+        log_cb(RETRO_LOG_INFO, "[dosbox] unmounting floppy %s\n", path);
+        drive = 'A';
+    }
+#if 0
+    else if (extension == ".iso" || extension == ".cue")
+    {
+        log_cb(RETRO_LOG_INFO, "[dosbox] umounting cdrom %s\n", path);
+        drive = 'D';
+    }
+#endif
+    else
+    {
+        log_cb(RETRO_LOG_INFO, "[dosbox] unsupported disk image\n %s", extension.c_str());
+        return false;
+    }
+    if (Drives[drive - 'A'])
+        DriveManager::UnmountDrive(drive - 'A');
+    Drives[drive - 'A'] = 0;
+    DriveManager::CycleDisks(drive - 'A', true);
+
+    return true;
+}
+
+static unsigned disk_get_num_images()
+{
+    return disk_count;
+}
+
+static bool disk_get_eject_state()
+{
+    return disk_tray_ejected;
+}
+
+static unsigned disk_get_image_index()
+{
+    return disk_index;
+}
+
+static bool disk_set_eject_state(bool ejected)
+{
+    if (log_cb && ejected)
+        log_cb(RETRO_LOG_INFO, "[dosbox] tray open\n");
+    else if (!ejected)
+        log_cb(RETRO_LOG_INFO, "[dosbox] tray closed\n");
+    disk_tray_ejected = ejected;
+
+    if (disk_count == 0)
+        return true;
+
+    if (ejected)
+    {
+        if(unmount_disk_image(disk_array[disk_get_image_index()]))
+            return true;
+        else
+            return false;
+    }
+    else
+    {
+        if(mount_disk_image(disk_array[disk_get_image_index()], false))
+            return true;
+        else
+            return false;
+    }
+
+    return false;
+}
+
+static bool disk_set_image_index(unsigned index)
+{
+    if (index < disk_get_num_images())
+    {
+        disk_index = index;
+        if (log_cb)
+            log_cb(RETRO_LOG_INFO, "[dosbox] disk index %u\n", index);
+        return true;
+    }
+    return false;
+}
+
+static bool disk_add_image_index()
+{
+    disk_count++;
+    if (log_cb)
+        log_cb(RETRO_LOG_INFO, "[dosbox] disk count %u\n", disk_count);
+    return true;
+}
+
+static bool disk_replace_image_index(unsigned index, const struct retro_game_info *info)
+{
+    if (index < disk_get_num_images())
+        snprintf(disk_array[index], sizeof(char) * PATH_MAX_LENGTH, "%s", info->path);
+    if(mount_disk_image(disk_array[index], true))
+        return true;
+    else
+        disk_count--;
+    return false;
+}
+
+static struct retro_disk_control_callback disk_interface = {
+    disk_set_eject_state,
+    disk_get_eject_state,
+    disk_get_image_index,
+    disk_set_image_index,
+    disk_get_num_images,
+    disk_replace_image_index,
+    disk_add_image_index,
+};
 
 /* libretro core implementation */
 struct retro_variable vars[] = {
@@ -582,6 +885,7 @@ void retro_set_environment(retro_environment_t cb)
 
     cb(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &allow_no_game);
     cb(RETRO_ENVIRONMENT_SET_VARIABLES, (void*)vars);
+    cb(RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE, &disk_interface);
 
     static const struct retro_controller_description ports_default[] =
     {
@@ -659,7 +963,7 @@ void retro_get_system_info(struct retro_system_info *info)
 #else
     info->library_version = CORE_VERSION;
 #endif
-    info->valid_extensions = "exe|com|bat|conf";
+    info->valid_extensions = "exe|com|bat|conf|img";
     info->need_fullpath = true;
     info->block_extract = false;
 }
