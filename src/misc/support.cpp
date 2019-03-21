@@ -33,6 +33,10 @@
 #include "support.h"
 #include "video.h"
 
+#ifdef __LIBRETRO__
+#include "libretro.h"
+extern retro_log_printf_t log_cb;
+#endif
 
 void upcase(std::string &str) {
 	int (*tf)(int) = std::toupper;
@@ -185,8 +189,9 @@ void E_Exit(const char * format,...) {
 	vsprintf(buf,format,msg);
 	va_end(msg);
 	strcat(buf,"\n");
-#ifdef HAVE_LIBNX
-	printf(buf);
+#ifdef __LIBRETRO__
+	if(log_cb)
+		log_cb(RETRO_LOG_ERROR, buf);
 #endif
 	throw(buf);
 }
